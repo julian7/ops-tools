@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -e
+set -o pipefail
+
+OPTIONS=""
+
+usage() {
+    echo "Usage: $0 [options]"
+    echo
+    echo "Where:"
+    echo "        -h             This help"
+    echo "        -p <PROFILE>   AWS profile"
+}
+
+trap usage ERR
+
+awscli() {
+    aws $OPTIONS "$@"
+}
+
+while getopts "hp:" arg; do
+    case $arg in
+    h)
+        usage
+        exit 0
+        ;;
+    p)
+        OPTIONS="--profile=${OPTARG}"
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+    esac
+done
+
+accid=$(awscli sts get-caller-identity | jq -r .Account)
+
+(
+    echo "Image name:AMI ID:Owner"
+    awscli ec2 describe-images --owners $accid | jq -r '.Images[]|.Name + ":" + .ImageId + ":" + .OwnerId'
+) | column -ts:

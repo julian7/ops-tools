@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+
+set -e -o pipefail
+
+usage() {
+    cat <<Eof
+Usage: $0 [options] [<name>]
+Where:
+    --env <env tag>
+    -e <env tag>
+            search EC2 instances with tag:env=<env tag> filter
+    --filter <key>=<value>[,<key>=<value>[,...]]
+    -f <key>=<value>[,<key>=<value>[,...]]
+            other filters (aws filter terms: Name=<key>,Values=<val>)
+    --profile <profile>
+    -p <profile>
+            sets AWS profile
+    <name>: search EC2 instances by tag:Name=<name> filter
+
+Note: the script runs aws cli. It honors its variables.
+Eof
+    exit 1
+}
+
+query_instances() {
+    local -a filters="$@"
+    aws $awsopts ec2 describe-instances --filters "${filters[@]}" |
+    jq -r '
+        .Reservations[] | .Instances[] |
+        {
+            "iid": .InstanceId,
+            "name": ((.Tags[] | select(.Key == "Name").Value) // "N/A"),
+            "env": ((.Tags[] | select(.Key == "env").Value) // "N/A"),
+            "tags": [.Tags[] | .Key + "=" + .Value ] | sort | join(",")
+        } |
+        [.iid, .name, .env, .tags] | join(":")
+    '
+}
+
+awsopts=""
+env=""
+filter=""
+profile=""
+declare -a qfilters
+
+while getopts "he:f:p:-:" arg; do
+    case "${arg}" in
+        -)
+            case "${OPTARG}" in
+                env)
+                    env="${!OPTIND}"
+                    OPTIND=$(( $OPTIND + 1 ))
+                    ;;
+                env=*)
+                    env="${OPTARG#*=}"
+                    ;;
+                filter)
+                    filter="${!OPTIND}"
+                    OPTIND=$(( $OPTIND + 1 ))
+                    ;;
+                env=*)
+                    filter="${OPTARG#*=}"
+                    ;;
+                profile)
+                    profile="${!OPTIND}"
+                    OPTIND=$(( $OPTIND + 1 ))
+                    ;;
+                profile=*)
+                    profile="${OPTARG#*=}"
+                    ;;
+            esac
+            ;;
+        h)
+            usage
+            ;;
+        e)
+            env="${OPTARG}"
+            ;;
+        f)
+            filter="${OPTARG}"
+            ;;
+        p)
+            profile="${OPTARG}"
+            ;;
+    esac
+done
+
+shift $((OPTIND -1))
+
+if (($# > 0)); then
+    qfilter+=("Name=tag:Name,Values=${1}")
+fi
+
+if [[ -n $env ]]; then
+    qfilter+=("Name=tag:env,Values=${env}")
+fi
+
+if [[ -n "$filter" ]]; then
+    for f in ${filter//,/ }; do
+        key="${f%=*}"
+        val="${f#*=}"
+        qfilter+=("Name=${key},Values=${val}")
+    done
+fi
+
+if [[ -n $profile ]]; then
+    awsopts="--profile=${profile}"
+fi
+
+declare -a iids
+while IFS=: read iid name env tag; do
+    iids+=( $iid )
+    iidx=${iid#i-}
+    declare "name_${iidx}=$name"
+    declare "env_${iidx}=$env"
+    declare "tag_${iidx}=$tag"
+done < <(query_instances "${qfilter[@]}")
+
+if ((${#iids[@]} > 1)); then
+    {
+        echo "IID}NAME}ENV}TAGS"
+        echo "----}---}---}----"
+        for iid in "${iids[@]}"; do
+            namevar="name_${iid#i-}"
+            envvar="env_${iid#i-}"
+            tagvar="tag_${iid#i-}"
+            printf "%s}%s}%s}%s\n" "${iid}" "${!namevar}" "${!envvar}" "${!tagvar}"
+        done
+    } | column -t -s '}'
+    exit
+fi
+
+if ((${#iids[@]} < 1)); then
+    echo "no instance found."
+    exit
+fi
+
+aws $awsopts ssm start-session --target "${iids[@]}"
