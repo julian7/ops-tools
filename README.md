@@ -2,6 +2,13 @@
 
 Assorted tools doing ops work
 
+## Scripts
+
+* ami-list: lists AMIs in a nicely formatted way
+* ldapq: quick LDAP query with sorted output
+* ldapdecode: decode base64-encoded fields in ldapsearch / ldapq output
+* ssmh: opens SSM session to EC2 instances selected by filters
+
 ## Licensing
 
 SPDX-License-Identifier: BlueOak-1.0.0 OR MIT
