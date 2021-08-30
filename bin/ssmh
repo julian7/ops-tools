@@ -24,7 +24,7 @@ Eof
 
 query_instances() {
     local -a filters="$@"
-    aws $awsopts ec2 describe-instances --filters "${filters[@]}" |
+    aws $awsopts ec2 describe-instances --filters ${filters[@]} |
     jq -r '
         .Reservations[] | .Instances[] |
         {
