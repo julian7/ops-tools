@@ -4,18 +4,26 @@ set -e -o pipefail
 
 usage() {
     cat <<Eof
-Usage: $0 [options] [<name>]
+Usage: $0 [options] [extra args]
 Where:
-    --env <env tag>
-    -e <env tag>
-            search EC2 instances with tag:env=<env tag> filter
+    --env <env tag> | --env=<env tag> | -e <env tag>
+        search EC2 instances with tag:env=<env tag> filter
+
     --filter <key>=<value>[,<key>=<value>[,...]]
     -f <key>=<value>[,<key>=<value>[,...]]
-            other filters (aws filter terms: Name=<key>,Values=<val>)
-    --profile <profile>
-    -p <profile>
-            sets AWS profile
-    <name>: search EC2 instances by tag:Name=<name> filter
+        other filters (aws filter terms: Name=<key>,Values=<val>)
+
+    --name <name> | --name=<name> | -n <name>
+        search EC2 instances by the name <name>
+
+    --profile <profile> | -p <profile>
+        sets AWS profile
+
+    extra args: these arguments will be passed to aws ssm start-session.
+    For example, the following parameters forward remote 8080 port to
+    local 9999:
+        --document-name AWS-StartPortForwardingSession \\
+        --parameters "localPortNumber=9999,portNumber=8080"
 
 Note: the script runs aws cli. It honors its variables.
 Eof
@@ -39,11 +47,12 @@ query_instances() {
 
 awsopts=""
 env=""
+name=""
 filter=""
 profile=""
 declare -a qfilters
 
-while getopts "he:f:p:-:" arg; do
+while getopts "he:f:n:p:-:" arg; do
     case "${arg}" in
         -)
             case "${OPTARG}" in
@@ -58,8 +67,15 @@ while getopts "he:f:p:-:" arg; do
                     filter="${!OPTIND}"
                     OPTIND=$(( $OPTIND + 1 ))
                     ;;
-                env=*)
+                filter=*)
                     filter="${OPTARG#*=}"
+                    ;;
+                name)
+                    name="${!OPTIND}"
+                    OPTIND=$(( $OPTIND + 1 ))
+                    ;;
+                name=*)
+                    name="${OPTARG#*=}"
                     ;;
                 profile)
                     profile="${!OPTIND}"
@@ -79,6 +95,9 @@ while getopts "he:f:p:-:" arg; do
         f)
             filter="${OPTARG}"
             ;;
+        n)
+            name="${OPTARG}"
+            ;;
         p)
             profile="${OPTARG}"
             ;;
@@ -87,13 +106,8 @@ done
 
 shift $((OPTIND -1))
 
-if (($# > 0)); then
-    qfilter+=("Name=tag:Name,Values=${1}")
-fi
-
-if [[ -n $env ]]; then
-    qfilter+=("Name=tag:env,Values=${env}")
-fi
+[[ -n $env ]] && qfilter+=("Name=tag:env,Values=${env}")
+[[ -n $name ]] && qfilter+=("Name=tag:Name,Values=${name}")
 
 if [[ -n "$filter" ]]; then
     for f in ${filter//,/ }; do
@@ -135,4 +149,4 @@ if ((${#iids[@]} < 1)); then
     exit
 fi
 
-aws $awsopts ssm start-session --target "${iids[@]}"
+aws $awsopts ssm start-session --target "${iids[@]}" "$@"
