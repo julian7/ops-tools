@@ -106,6 +106,7 @@ done
 
 shift $((OPTIND -1))
 
+qfilter+=("Name=instance-state-name,Values=running")
 [[ -n $env ]] && qfilter+=("Name=tag:env,Values=${env}")
 [[ -n $name ]] && qfilter+=("Name=tag:Name,Values=${name}")
 
