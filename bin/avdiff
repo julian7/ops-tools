@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+if (($# != 1)); then
+    echo "Usage: ${0##*/} <decrypted ansible vault file>"
+    echo
+    echo "Does unified diff between versioned and modified versions of ansible vault files."
+    echo "The modified version has to be decrypted, versioned one has to be encrypted."
+    echo
+    echo "Note: the tool doesn't handle vault passwords, but uses \`ansible-vault\` command."
+    echo "Please use \`\$ANSIBLE_VAULT_PASSWORD_FILE\` to automate decryption."
+    echo
+    echo "Note: this command uses ansible-vault, cut, diff, and git commands."
+    exit 1
+fi
+FNAME="$1"
+diff -u <(
+    git cat-file $(
+        git ls-tree -l HEAD "${FNAME}" | cut -d' ' -f2,3
+    ) | ansible-vault decrypt -
+) "${FNAME}"
