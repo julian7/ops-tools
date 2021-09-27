@@ -39,6 +39,7 @@ query_instances() {
             "iid": .InstanceId,
             "name": ((.Tags[] | select(.Key == "Name").Value) // "N/A"),
             "env": ((.Tags[] | select(.Key == "env").Value) // "N/A"),
+            "ip": .NetworkInterfaces[0].PrivateIpAddress,
             "tags": [.Tags[] | .Key + "=" + .Value ] | sort | join(",")
         } |
         [.iid, .name, .env, .tags] | join(":")
@@ -123,23 +124,25 @@ if [[ -n $profile ]]; then
 fi
 
 declare -a iids
-while IFS=: read iid name env tag; do
+while IFS=: read iid name env ip tag; do
     iids+=( $iid )
     iidx=${iid#i-}
     declare "name_${iidx}=$name"
     declare "env_${iidx}=$env"
     declare "tag_${iidx}=$tag"
+    declare "ip_${iidx}=$ip"
 done < <(query_instances "${qfilter[@]}")
 
 if ((${#iids[@]} > 1)); then
     {
-        echo "IID}NAME}ENV}TAGS"
-        echo "----}---}---}----"
+        echo "IID}NAME}IP}ENV}TAGS"
+        echo "----}---}--}---}----"
         for iid in "${iids[@]}"; do
             namevar="name_${iid#i-}"
             envvar="env_${iid#i-}"
             tagvar="tag_${iid#i-}"
-            printf "%s}%s}%s}%s\n" "${iid}" "${!namevar}" "${!envvar}" "${!tagvar}"
+            ipvar="ip_${iid#i-}"
+            printf "%s}%s}%s}%s}%s\n" "${iid}" "${!namevar}" "${!ipvar}" "${!envvar}" "${!tagvar}"
         done
     } | column -t -s '}'
     exit
