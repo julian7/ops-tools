@@ -37,6 +37,6 @@ done
 accid=$(awscli sts get-caller-identity | jq -r .Account)
 
 (
-    echo "Image name:AMI ID:Owner"
-    awscli ec2 describe-images --owners $accid | jq -r '.Images[]|.Name + ":" + .ImageId + ":" + .OwnerId'
-) | column -ts:
+    echo "Image name{AMI ID{Creation date"
+    awscli ec2 describe-images --owners $accid | jq -r '.Images[]|[.Name, .ImageId, .CreationDate] | join("{")'
+) | column -ts'{'
