@@ -3,6 +3,7 @@
 if (($# < 3)); then
     echo "Usage: ${0##*/} username[:passwd_entry] ldaps://host DN -ls [sub-DN] [selector...]"
     echo "or   : ${0##*/} username[:passwd_entry] ldaps://host DN selector..."
+    echo "or   : ${0##*/} username[:passwd_entry] ldaps://host -base"
     echo
     echo "Lists entries or selects entries from LDAP database. It always does a lexical sort"
     echo "on individual results."
@@ -10,6 +11,7 @@ if (($# < 3)); then
     echo "Passwords are stored in ~/.pw/<username> files, you can provide a different"
     echo "username than the one stores the password."
     echo "-ls [sub-DN]    lists immediate entries under DN, or it can dial to sub-DN,DN"
+    echo "-base           shows base object"
     echo "selector...     LDAP query, selector, or any other ldapsearch options"
     exit 1
 fi
@@ -19,8 +21,12 @@ sso=${1%:*}
 pw=${1#*:}
 url=$2
 dn=$3
+dnopt="-b $3"
 shift 3
-if [[ "$1" = "-ls" ]]; then
+if [[ "$dn" = "-base" ]]; then
+    strategy=base
+    dnopt=""
+elif [[ "$1" = "-ls" ]]; then
     if [[ -n "$2" ]]; then
         dn="$2,$dn"
     else
@@ -30,5 +36,5 @@ if [[ "$1" = "-ls" ]]; then
     shift 2
 fi
 
-ldapsearch -o ldif-wrap=no -x -D "$sso" -y ~/.pw/"$pw" -H "$url" -s $strategy -b "$dn" -LLL "$@" |
+ldapsearch -o ldif-wrap=no -x -D "$sso" -y ~/.pw/"$pw" -H "$url" -s $strategy $dnopt -LLL "$@" |
 LANG=C awk '{print | cmd; close(cmd); print ""}' RS= cmd=sort
